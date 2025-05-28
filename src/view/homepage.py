@@ -1,5 +1,7 @@
+# Homepage.py
 import customtkinter as ctk
 from tkinter import ttk
+from src.view.card import CVCard # Import the new CVCard class
 
 class Homepage:
     def __init__(self, root):
@@ -44,9 +46,18 @@ class Homepage:
         top_match_label.pack(side='left')
 
         self.top_match_var = ctk.StringVar(value='3')
-        top_match_dropdown = ctk.CTkComboBox(top_match_frame, variable=self.top_match_var, 
-            values=[str(i) for i in range(1, 6)], width=100)
-        top_match_dropdown.pack(side='left', padx=10)
+        vcmd = (self.root.register(self.validate_positive_integer_input), '%P')
+        
+        self.top_match_entry = ctk.CTkEntry(
+            top_match_frame, 
+            font=("Arial", 12), 
+            width=100, 
+            height=30,
+            textvariable=self.top_match_var,
+            validate='key', 
+            validatecommand=vcmd 
+        )
+        self.top_match_entry.pack(side='left', padx=10)
 
         self.search_btn = ctk.CTkButton(self.root, text="Search", width=400, height=40, 
             font=("Arial", 12, "bold"))
@@ -61,55 +72,36 @@ class Homepage:
 
         self.add_sample_cards()
     
-    def make_card(self, parent, name, matches, keywords):
-        card = ctk.CTkFrame(parent, width=200, height=180, corner_radius=10, 
-            border_width=1, border_color="#ddd")
-        card.pack(side='left', padx=10, pady=10)
-        card.pack_propagate(False)
-
-        top = ctk.CTkFrame(card, fg_color="transparent")
-        top.pack(fill='x', padx=5, pady=5)
+    def validate_positive_integer_input(self, P):
+        if P == "":
+            return True
         
-        name_lbl = ctk.CTkLabel(top, text=name, font=('Arial', 12, 'bold'))
-        name_lbl.pack(side='left', padx=5)
-        
-        match_lbl = ctk.CTkLabel(top, text=f"{matches} matches", font=('Arial', 10))
-        match_lbl.pack(side='right', padx=5)
+        if P.isdigit():
+            if int(P) > 0:
+                return True
+            else:
+                return False
+        else:
+            return False
 
-        kw_label = ctk.CTkLabel(card, text="Matched keywords:", font=('Arial', 11, 'bold'))
-        kw_label.pack(anchor='w', padx=5, pady=(5,0))
+    # Removed the make_card method, now handled by CVCard class
 
-        for idx, kw in enumerate(keywords, 1):
-            kw_text = f"{idx}. {kw['keyword']}: {kw['count']} occurrence{'s' if kw['count']>1 else ''}"
-            kw_lbl = ctk.CTkLabel(card, text=kw_text, font=('Arial', 10))
-            kw_lbl.pack(anchor='w', padx=10)
-
-        btn_frame = ctk.CTkFrame(card, fg_color="transparent")
-        btn_frame.pack(fill='x', pady=5, padx=5)
-
-        summary_btn = ctk.CTkButton(btn_frame, text="Summary", width=80, height=24, 
-            font=('Arial', 10))
-        summary_btn.pack(side='left', padx=5)
-
-        view_btn = ctk.CTkButton(btn_frame, text="View CV", width=80, height=24, 
-                                font=('Arial', 10))
-        view_btn.pack(side='right', padx=5)
-    
     def add_sample_cards(self):
         for widget in self.cards_frame.winfo_children():
             widget.destroy()
         
-        self.make_card(self.cards_frame, "Farhan", 4, [
+        # Instantiate CVCard objects directly
+        CVCard(self.cards_frame, "Farhan", 4, [
             {"keyword": "React", "count": 1},
             {"keyword": "Express", "count": 2},
             {"keyword": "HTML", "count": 1}
         ])
 
-        self.make_card(self.cards_frame, "Aland", 1, [
+        CVCard(self.cards_frame, "Aland", 1, [
             {"keyword": "React", "count": 1}
         ])
 
-        self.make_card(self.cards_frame, "Ariel", 1, [
+        CVCard(self.cards_frame, "Ariel", 1, [
             {"keyword": "Express", "count": 1}
         ])
 

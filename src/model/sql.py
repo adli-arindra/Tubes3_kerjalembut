@@ -3,6 +3,7 @@ from typing import List, Optional
 from datetime import date
 from src.model.applicant_profile import ApplicantProfile
 from src.model.application_detail import ApplicationDetail
+import os
 
 class ApplicantDatabase:
     def __init__(self, db_name: str = 'applicant.db'):
@@ -18,6 +19,10 @@ class ApplicantDatabase:
 
     def _init_db(self) -> None:
         try:
+            db_dir = os.path.dirname(self.db_name)
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir)
+
             self.conn = sqlite3.connect(self.db_name)
             cur = self.conn.cursor()
             
@@ -59,8 +64,8 @@ class ApplicantDatabase:
             (first_name, last_name, date_of_birth, address, phone_number)
             VALUES (?, ?, ?, ?, ?)
             ''', (applicant.first_name, applicant.last_name, 
-                applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
-                applicant.address, applicant.phone_number))
+            applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
+            applicant.address, applicant.phone_number))
             
             self.conn.commit()
             applicant.applicant_id = cur.lastrowid
@@ -134,9 +139,9 @@ class ApplicantDatabase:
                 address = ?, phone_number = ?
             WHERE applicant_id = ?
             ''', (applicant.first_name, applicant.last_name,
-                applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
-                applicant.address, applicant.phone_number,
-                applicant.applicant_id))
+            applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
+            applicant.address, applicant.phone_number,
+            applicant.applicant_id))
             
             self.conn.commit()
             return cur.rowcount > 0
@@ -177,27 +182,37 @@ class DatabaseError(Exception):
     pass
 
 if __name__ == "__main__":
-    with ApplicantDatabase() as db:
-        new_applicant = ApplicantProfile(
-            first_name="Jane",
-            last_name="Smith",
-            date_of_birth=date(1990, 5, 15),
-            phone_number="555-1234"
-        )
-        
-        added_applicant = db.add_applicant(new_applicant)
-        print(f"Added applicant: {added_applicant}")
-        
-        detail = ApplicationDetail(
-            applicant_id=added_applicant.applicant_id,
-            application_role="Software Engineer",
-            cv_path="/path/to/jane_cv.pdf"
-        )
-        added_detail = db.add_application_detail(detail)
-        print(f"Added detail: {added_detail}")
-        
-        applicant, details = db.get_applicant_with_details(added_applicant.applicant_id)
-        print(f"\nRetrieved applicant: {applicant}")
-        print("Details:")
-        for d in details:
-            print(f"  - {d}")
+    db_path = 'data/applicants.db' 
+    with ApplicantDatabase(db_path) as db:
+        print("Welcome to the Applicant Database SQL shell.")
+        print("Enter SQL commands. Type 'exit' to quit.")
+
+        while True:
+            try:
+                command = input("SQL> ").strip()
+                if command.lower() == 'exit':
+                    break
+                
+                if not command:
+                    continue
+
+                cursor = db.conn.cursor()
+                cursor.execute(command)
+                
+                if command.lower().startswith(('insert', 'update', 'delete')):
+                    db.conn.commit()
+                    print(f"{cursor.rowcount} row(s) affected.")
+                else:
+                    rows = cursor.fetchall()
+                    if rows:
+                        headers = [description[0] for description in cursor.description]
+                        print("\t".join(headers))
+                        print("-" * (len("\t".join(headers)) + 5))
+                        for row in rows:
+                            print("\t".join(map(str, row)))
+                    else:
+                        print("No results.")
+            except sqlite3.Error as e:
+                print(f"SQL Error: {e}")
+            except Exception as e:
+                print(f"An unexpected error occurred: {e}")
