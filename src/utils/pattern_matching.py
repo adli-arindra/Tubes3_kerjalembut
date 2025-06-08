@@ -47,6 +47,28 @@ class PatternMatching:
     
     @staticmethod
     def bm(text: str, pattern: str) -> bool:
+        n = len(text)
+        m = len(pattern)
+
+        if m == 0:
+            return True
+        if m > n:
+            return False
+
+        # Preprocess: create bad character shift table (Horspool variant)
+        skip = {pattern[i]: m - i - 1 for i in range(m - 1)}
+
+        i = 0
+        while i <= n - m:
+            j = m - 1
+            while j >= 0 and pattern[j] == text[i + j]:
+                j -= 1
+            if j < 0:
+                return True
+
+            next_char = text[i + m - 1]
+            i += skip.get(next_char, m)
+
         return False
     
     @staticmethod
