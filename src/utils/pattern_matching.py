@@ -93,7 +93,48 @@ class PatternMatching:
     
     @staticmethod
     def aho_corasick(text: str, patterns: list[str]) -> bool:
+        from collections import deque
+
+        class Node:
+            def __init__(self):
+                self.children = {}
+                self.fail = None
+                self.output = set()
+
+        root = Node()
+        for pattern in patterns:
+            node = root
+            for char in pattern:
+                if char not in node.children:
+                    node.children[char] = Node()
+                node = node.children[char]
+            node.output.add(pattern)
+
+        queue = deque()
+        for child in root.children.values():
+            child.fail = root
+            queue.append(child)
+
+        while queue:
+            current = queue.popleft()
+            for key, child in current.children.items():
+                fail_node = current.fail
+                while fail_node and key not in fail_node.children:
+                    fail_node = fail_node.fail
+                child.fail = fail_node.children[key] if fail_node and key in fail_node.children else root
+                child.output |= child.fail.output
+                queue.append(child)
+
+        node = root
+        for char in text:
+            while node and char not in node.children:
+                node = node.fail
+            node = node.children[char] if node and char in node.children else root
+            if node.output:
+                return True
+
         return False
+
     
 # janlup tes dulu, ganti aja methodnya jadi method algoritma lu pada
 if __name__ == "__main__":
@@ -166,5 +207,28 @@ if __name__ == "__main__":
         print(f"  Text: '{text}'")
         print(f"  Pattern: '{pattern}'")
         print(f"  Expected Levenshtein Distance: {expected}")
+        print(f"  Result: {result}")
+        print(f"  Match: {result == expected}")
+
+    print("--- Aho-Corasick Function Test ---")
+
+    test_cases_ac = [
+        ("ABABDABACDABABCABAB", ["ABABCABAB", "XYZ"], True),
+        ("ABCDEFG", ["XYZ", "LMN"], False),
+        ("ABCDEFG", ["EFG", "HIJ"], True),
+        ("AAAAAA", ["AAA", "BBBB"], True),
+        ("ABCDEFG", [], False),
+        ("", ["A", "B"], False),
+        ("ABCDEFG", [""], True),
+        ("ABCDEFG", ["CDE", "XYZ"], True),
+        ("ABCDEFG", ["xyz", "efg"], False),  # case-sensitive
+    ]
+
+    for i, (text, patterns, expected) in enumerate(test_cases_ac):
+        result = PatternMatching.aho_corasick(text, patterns)
+        print(f"\nTest Case {i+1}:")
+        print(f"  Text: '{text}'")
+        print(f"  Patterns: {patterns}")
+        print(f"  Expected: {expected}")
         print(f"  Result: {result}")
         print(f"  Match: {result == expected}")
