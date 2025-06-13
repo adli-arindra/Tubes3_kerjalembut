@@ -4,6 +4,13 @@ Program ini adalah sebuah aplikasi manajemen CV ATS yang mengimplementasikan KMP
 # ii. Requirement Program
 1. Memiliki docker
 2. Memliki python dan pip
+3. Buatlah venv dengan library yang sesuai dengan menuliskan command berikut
+
+```bash
+python -m venv venv
+./venv/Scripts/activate
+pip install -r requirements.txt
+```
 
 # iii. Command
 Untuk menjalankan program, pertama jalankan dulu daemon docker pada komputer. Lalu pada root folder tuliskan command berikut
