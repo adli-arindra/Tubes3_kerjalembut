@@ -2,17 +2,15 @@ import mysql.connector
 from typing import List, Optional
 from datetime import date
 import os
-import configparser # Import configparser
+import configparser
 
-# Assuming these models are compatible; adjust if needed for MySQL-specific types
 from src.model.applicant_profile import ApplicantProfile
 from src.model.application_detail import ApplicationDetail
 
 class ApplicantDatabase:
-    # Changed __init__ to take config_path instead of db_config dictionary
     def __init__(self, config_path: str = 'data/config.ini'):
         self.config_path = config_path
-        self.db_config = self._load_db_config() # Load config internally
+        self.db_config = self._load_db_config()
         self.conn = None
         self._init_db()
 
@@ -23,57 +21,30 @@ class ApplicantDatabase:
         self.close()
 
     def _load_db_config(self) -> dict:
-        """Loads MySQL database configuration from config.ini."""
         config = configparser.ConfigParser()
-        
         if not os.path.exists(self.config_path):
-            raise DatabaseError(
-                f"Configuration file '{self.config_path}' not found. "
-                "Please create it with your MySQL connection details (e.g., host, user, password, database)."
-            )
-
+            raise DatabaseError(f"Configuration file '{self.config_path}' not found.")
         config.read(self.config_path)
-
         if 'database' not in config:
-            raise DatabaseError(
-                f"Missing '[database]' section in '{self.config_path}'. "
-                "Please ensure your config.ini has a [database] section."
-            )
-        
+            raise DatabaseError(f"Missing '[database]' section in '{self.config_path}'.")
         db_section = config['database']
-        
-        # Ensure 'type' is specified as 'mysql'
         db_type = db_section.get('type')
         if db_type and db_type.lower() != 'mysql':
-            raise DatabaseError(
-                f"Unsupported database type '{db_type}' specified in '{self.config_path}'. "
-                "This class expects 'mysql'."
-            )
-
-        # Extract MySQL specific settings
+            raise DatabaseError(f"Unsupported database type '{db_type}' specified.")
         mysql_config = {
             'host': db_section.get('host'),
             'user': db_section.get('user'),
             'password': db_section.get('password'),
             'database': db_section.get('database')
         }
-
-        # Validate that all required MySQL settings are present
         if not all(mysql_config.values()):
             missing_keys = [k for k, v in mysql_config.items() if v is None]
-            raise DatabaseError(
-                f"Incomplete MySQL database configuration in '{self.config_path}'. "
-                f"Missing keys: {', '.join(missing_keys)}. "
-                "Please provide host, user, password, and database."
-            )
-        
-        # Add the 'type' back to the config for internal use if needed (though already implicit here)
-        mysql_config['type'] = 'mysql' 
+            raise DatabaseError(f"Incomplete MySQL database configuration. Missing keys: {', '.join(missing_keys)}.")
+        mysql_config['type'] = 'mysql'
         return mysql_config
 
     def _init_db(self) -> None:
         try:
-            # Connect to MySQL server using the loaded config
             self.conn = mysql.connector.connect(
                 host=self.db_config['host'],
                 user=self.db_config['user'],
@@ -81,8 +52,6 @@ class ApplicantDatabase:
                 database=self.db_config['database']
             )
             cur = self.conn.cursor()
-            
-            # Create ApplicantProfile table
             cur.execute('''
             CREATE TABLE IF NOT EXISTS ApplicantProfile (
                 applicant_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -93,8 +62,6 @@ class ApplicantDatabase:
                 phone_number VARCHAR(20)
             )
             ''')
-            
-            # Create ApplicationDetail table
             cur.execute('''
             CREATE TABLE IF NOT EXISTS ApplicationDetail (
                 detail_id INT AUTO_INCREMENT PRIMARY KEY,
@@ -104,18 +71,15 @@ class ApplicantDatabase:
                 FOREIGN KEY(applicant_id) REFERENCES ApplicantProfile(applicant_id) ON DELETE CASCADE
             )
             ''')
-            
             self.conn.commit()
         except mysql.connector.Error as e:
-            # Provide more context for common MySQL errors
             error_message = f"MySQL Database initialization failed: {e}. "
             if "Unknown database" in str(e):
-                error_message += f"The database '{self.db_config['database']}' might not exist. Please create it in your MySQL server."
+                error_message += f"The database '{self.db_config['database']}' might not exist."
             elif "Access denied" in str(e):
-                error_message += "Access denied. Check your MySQL user, password, and host permissions."
+                error_message += "Access denied."
             elif "Can't connect to MySQL server" in str(e):
-                error_message += f"Could not connect to MySQL server at {self.db_config['host']}. Is your Docker container running?"
-            
+                error_message += f"Could not connect to MySQL server at {self.db_config['host']}."
             raise DatabaseError(error_message)
         except Exception as e:
             raise DatabaseError(f"An unexpected error occurred during database initialization: {e}")
@@ -124,6 +88,18 @@ class ApplicantDatabase:
         if self.conn and self.conn.is_connected():
             self.conn.close()
             self.conn = None
+
+    def clear_db(self) -> None:
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SET FOREIGN_KEY_CHECKS = 0")
+            cur.execute("TRUNCATE TABLE ApplicationDetail")
+            cur.execute("TRUNCATE TABLE ApplicantProfile")
+            cur.execute("SET FOREIGN_KEY_CHECKS = 1")
+            self.conn.commit()
+            print("Database cleared successfully.")
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error clearing database: {e}")
 
     def add_applicant(self, applicant: ApplicantProfile) -> ApplicantProfile:
         try:
@@ -135,7 +111,6 @@ class ApplicantDatabase:
             ''', (applicant.first_name, applicant.last_name, 
                   applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
                   applicant.address, applicant.phone_number))
-            
             self.conn.commit()
             applicant.applicant_id = cur.lastrowid
             return applicant
@@ -149,7 +124,6 @@ class ApplicantDatabase:
             INSERT INTO ApplicationDetail (applicant_id, application_role, cv_path)
             VALUES (%s, %s, %s)
             ''', (detail.applicant_id, detail.application_role, detail.cv_path))
-            
             self.conn.commit()
             detail.detail_id = cur.lastrowid
             return detail
@@ -161,7 +135,6 @@ class ApplicantDatabase:
             cur = self.conn.cursor()
             cur.execute('SELECT * FROM ApplicantProfile WHERE applicant_id = %s', (applicant_id,))
             row = cur.fetchone()
-            
             if row:
                 return self._row_to_applicant(row)
             return None
@@ -172,7 +145,6 @@ class ApplicantDatabase:
         applicant = self.get_applicant(applicant_id)
         if not applicant:
             return None
-            
         details = self.get_applicant_details(applicant_id)
         return (applicant, details)
 
@@ -181,7 +153,6 @@ class ApplicantDatabase:
             cur = self.conn.cursor()
             cur.execute('SELECT * FROM ApplicationDetail WHERE applicant_id = %s', (applicant_id,))
             rows = cur.fetchall()
-            
             return [self._row_to_application_detail(row) for row in rows]
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error getting applicant details: {e}")
@@ -194,7 +165,6 @@ class ApplicantDatabase:
             SELECT * FROM ApplicantProfile 
             WHERE first_name LIKE %s OR last_name LIKE %s
             ''', (search_pattern, search_pattern))
-            
             return [self._row_to_applicant(row) for row in cur.fetchall()]
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error searching applicants: {e}")
@@ -211,7 +181,6 @@ class ApplicantDatabase:
                   applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
                   applicant.address, applicant.phone_number,
                   applicant.applicant_id))
-            
             self.conn.commit()
             return cur.rowcount > 0
         except mysql.connector.Error as e:
@@ -220,10 +189,8 @@ class ApplicantDatabase:
     def delete_applicant(self, applicant_id: int) -> bool:
         try:
             cur = self.conn.cursor()
-            
             cur.execute('DELETE FROM ApplicationDetail WHERE applicant_id = %s', (applicant_id,))
             cur.execute('DELETE FROM ApplicantProfile WHERE applicant_id = %s', (applicant_id,))
-            
             self.conn.commit()
             return cur.rowcount > 0
         except mysql.connector.Error as e:
@@ -233,15 +200,12 @@ class ApplicantDatabase:
         dob = None
         if row[3]:
             try:
-                # MySQL connector often returns date objects directly for DATE columns
                 if isinstance(row[3], date):
                     dob = row[3]
                 else:
-                    # Fallback if it comes as a string (e.g., from a different configuration)
                     dob = date.fromisoformat(str(row[3])) 
             except (TypeError, ValueError):
                 dob = None 
-        
         return ApplicantProfile(
             applicant_id=row[0],
             first_name=row[1],
@@ -262,27 +226,92 @@ class ApplicantDatabase:
 class DatabaseError(Exception):
     pass
 
-if __name__ == "__main__":
+def test_applicant_database():
+    from src.model.applicant_profile import ApplicantProfile
+    from src.model.application_detail import ApplicationDetail
+    from datetime import date
+
     try:
-        # ApplicantDatabase will now load its own config from 'config.ini' by default
+        with ApplicantDatabase() as db:
+            print("== Starting ApplicantDatabase tests ==")
+
+            # Clear database
+            db.clear_db()
+
+            # Add applicant
+            applicant = ApplicantProfile(
+                applicant_id=None,
+                first_name="John",
+                last_name="Doe",
+                date_of_birth=date(1990, 1, 1),
+                address="123 Main St",
+                phone_number="1234567890"
+            )
+            applicant = db.add_applicant(applicant)
+            print(f"Added applicant: {applicant}")
+
+            # Get applicant
+            fetched = db.get_applicant(applicant.applicant_id)
+            print(f"Fetched applicant: {fetched}")
+
+            # Update applicant
+            applicant.first_name = "Jane"
+            success = db.update_applicant(applicant)
+            print(f"Updated applicant: {success}")
+
+            # Search applicant
+            results = db.search_applicants("Jane")
+            print(f"Search results: {results}")
+
+            # Add application detail
+            detail = ApplicationDetail(
+                detail_id=None,
+                applicant_id=applicant.applicant_id,
+                application_role="Engineer",
+                cv_path="/path/to/cv.pdf"
+            )
+            detail = db.add_application_detail(detail)
+            print(f"Added application detail: {detail}")
+
+            # Get applicant details
+            details = db.get_applicant_details(applicant.applicant_id)
+            print(f"Application details: {details}")
+
+            # Get applicant with details
+            applicant_bundle = db.get_applicant_with_details(applicant.applicant_id)
+            print(f"Applicant with details: {applicant_bundle}")
+
+            # Delete applicant
+            deleted = db.delete_applicant(applicant.applicant_id)
+            print(f"Deleted applicant: {deleted}")
+
+            # Final check
+            empty_check = db.get_applicant(applicant.applicant_id)
+            print(f"Check after deletion: {empty_check}")
+
+            print("== Tests completed ==")
+
+    except DatabaseError as e:
+        print(f"DatabaseError during tests: {e}")
+    except Exception as e:
+        print(f"Unexpected error during tests: {e}")
+
+
+if __name__ == "__main__":
+    # test_applicant_database()
+    try:
         with ApplicantDatabase() as db: 
             print("Welcome to the Applicant Database SQL shell (MySQL).")
             print("Enter SQL commands. Type 'exit' to quit.")
-
             while True:
                 try:
                     command = input("SQL> ").strip()
                     if command.lower() == 'exit':
                         break
-                    
                     if not command:
                         continue
-
                     cursor = db.conn.cursor()
-                    # Directly executing user input for a shell is fine for development/testing,
-                    # but be aware of SQL injection risks in a production application.
                     cursor.execute(command)
-                    
                     if command.lower().startswith(('insert', 'update', 'delete')):
                         db.conn.commit()
                         print(f"{cursor.rowcount} row(s) affected.")
@@ -302,6 +331,5 @@ if __name__ == "__main__":
                     print(f"An unexpected error occurred: {e}")
     except DatabaseError as e:
         print(f"CRITICAL DATABASE ERROR: {e}")
-        print("Please ensure config.ini is properly set up for MySQL and your Dockerized MySQL server is running.")
-    except mysql.connector.Error as e: # This specifically catches connection issues before DatabaseError might be raised
-        print(f"MySQL connection error: {e}. Please ensure your Dockerized MySQL container is running and credentials are correct.")
+    except mysql.connector.Error as e:
+        print(f"MySQL connection error: {e}.")
