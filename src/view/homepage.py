@@ -1,7 +1,12 @@
-# Homepage.py
 import customtkinter as ctk
 from tkinter import ttk
-from src.view.card import CVCard # Import the new CVCard class
+from src.view.cv_card import CvCard
+from src.model.search_result import SearchResult
+from src.model.applicant_profile import ApplicantProfile
+from src.model.application_detail import ApplicationDetail
+from src.utils.sql import ApplicantDatabase
+from src.utils.pdf_reader import PDFReader
+from src.utils.pattern_matching import PatternMatching
 
 class Homepage:
     def __init__(self, root):
@@ -10,100 +15,123 @@ class Homepage:
         ctk.set_default_color_theme("blue")
         
         self.root.title("CV Analyzer App")
-        self.root.geometry("1024x800")
+        self.root.geometry("800x600")
         self.root.resizable(False, False)
-        
-        self.setup_ui()
-    
-    def setup_ui(self):
-        title = ctk.CTkLabel(self.root, text="CV Analyzer App", font=("Arial", 16, "bold"))
-        title.pack(pady=20)
 
-        kw_label = ctk.CTkLabel(self.root, text="Keywords:", font=("Arial", 12))
-        kw_label.pack(anchor='w', padx=20)
-        
-        self.kw_entry = ctk.CTkEntry(self.root, font=("Arial", 12), width=400, height=30)
-        self.kw_entry.insert(0, "React, Express, HTML")
-        self.kw_entry.configure(state='readonly')
-        self.kw_entry.pack(padx=20, pady=5, fill='x')
+        self.db = ApplicantDatabase()
+        self.search_results: list[SearchResult] = []
+        self.algorithm_var = ctk.StringVar(value="KMP")
+        self.keyword_var = ctk.StringVar(value="")
+        self.cv_cards = []
+        self.match_count = ctk.IntVar(value=10)
 
-        alg_frame = ctk.CTkFrame(self.root, fg_color="transparent")
-        alg_frame.pack(anchor='w', padx=20, pady=10)
-        
-        alg_label = ctk.CTkLabel(alg_frame, text="Search Algorithm:", font=("Arial", 12))
-        alg_label.pack(side='left')
+        self.container = ctk.CTkFrame(self.root, fg_color="transparent")
+        self.container.pack(fill="both", expand=True, padx=20, pady=(5,20))
 
-        self.algo_var = ctk.StringVar(value="BM")
-        kmp_rb = ctk.CTkRadioButton(alg_frame, text="KMP", variable=self.algo_var, value="KMP")
-        bm_rb = ctk.CTkRadioButton(alg_frame, text="BM", variable=self.algo_var, value="BM")
-        kmp_rb.pack(side='left', padx=10)
-        bm_rb.pack(side='left')
+        self.label = ctk.CTkLabel(self.container, text="Keywords:", font=("Arial", 18))
+        self.label.pack(anchor='w')
 
-        top_match_frame = ctk.CTkFrame(self.root, fg_color="transparent")
-        top_match_frame.pack(anchor='w', padx=20, pady=10)
-        
-        top_match_label = ctk.CTkLabel(top_match_frame, text="Top Matches:", font=("Arial", 12))
-        top_match_label.pack(side='left')
+        self.entry_keyword = ctk.CTkEntry(self.container, placeholder_text="Python, React, HTML", height=30, textvariable=self.keyword_var)
+        self.entry_keyword.pack(anchor="w", pady=5, fill='x')
 
-        self.top_match_var = ctk.StringVar(value='3')
-        vcmd = (self.root.register(self.validate_positive_integer_input), '%P')
-        
-        self.top_match_entry = ctk.CTkEntry(
-            top_match_frame, 
-            font=("Arial", 12), 
-            width=100, 
-            height=30,
-            textvariable=self.top_match_var,
-            validate='key', 
-            validatecommand=vcmd 
+        self.label = ctk.CTkLabel(
+            self.container,
+            text="Hint: Enter multiple keywords with a ',' (comma) as a separator between each keyword (if multiple keywords are provided)",
+            font=("Arial", 14),
+            text_color="#FF7F7F",
+            wraplength=400
         )
-        self.top_match_entry.pack(side='left', padx=10)
+        self.label.pack(fill="x")
 
-        self.search_btn = ctk.CTkButton(self.root, text="Search", width=400, height=40, 
-            font=("Arial", 12, "bold"))
-        self.search_btn.pack(pady=20)
+        self.label = ctk.CTkLabel(self.container, text="Search Algorithm:", font=("Arial", 18))
+        self.label.pack(anchor='w')
 
-        self.results_label = ctk.CTkLabel(self.root, text="Results\n100 CVs scanned in 100ms", 
-            font=("Arial", 12, "bold"))
-        self.results_label.pack(pady=10)
+        self.radio_frame = ctk.CTkFrame(self.container, fg_color="transparent")
+        self.radio_frame.pack(fill="x", pady=10, padx=(75, 0))
 
-        self.cards_frame = ctk.CTkScrollableFrame(self.root, width=950, height=400)
-        self.cards_frame.pack(padx=20, pady=5, fill='both', expand=True)
+        self.kmp_radio = ctk.CTkRadioButton(self.radio_frame, text="KMP", variable=self.algorithm_var, value="KMP")
+        self.bm_radio = ctk.CTkRadioButton(self.radio_frame, text="Boyer-Moore", variable=self.algorithm_var, value="Boyer-Moore")
+        self.aho_radio = ctk.CTkRadioButton(self.radio_frame, text="Aho-Corasick", variable=self.algorithm_var, value="Aho-Corasick")
 
-        self.add_sample_cards()
+        self.kmp_radio.pack(side="left", expand=True, fill="x", padx=5)
+        self.bm_radio.pack(side="left", expand=True, fill="x", padx=5)
+        self.aho_radio.pack(side="left", expand=True, fill="x", padx=5)
+
+        self.label = ctk.CTkLabel(self.container, text="Show Matches:", font=("Arial", 18))
+        self.label.pack(anchor='w')
+
+        vcmd = self.root.register(self.validate_entry_matches)
+
+        self.entry_matches = ctk.CTkEntry(
+            self.container,
+            placeholder_text="10",
+            height=30,
+            width=150,
+            validate="key",
+            validatecommand=(vcmd, "%P"),
+            textvariable=self.match_count
+        )
+        self.entry_matches.pack(anchor="w", pady=5, padx=0)
+
+        self.search_button = ctk.CTkButton(self.container, text="Search", command=self._on_search)
+        self.search_button.pack(fill="x", padx=10, pady=(10, 0))
+
+        self.results_frame = ctk.CTkScrollableFrame(self.container)
+        self.results_frame.pack(fill="both", expand=True, pady=(10, 0))
+
+        for i in range(3):
+            self.results_frame.grid_columnconfigure(i, weight=1)
+
+    def add_cv_card(self, search_result: SearchResult):
+        card = CvCard(self.results_frame, search_result=search_result)
+        
+        index = len(self.cv_cards)
+        row = index // 3
+        col = index % 3
+
+        card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+        self.cv_cards.append(card)
+
+    def validate_entry_matches(self, value):
+        if value == "":
+            return True 
+        return value.isdigit() and int(value) > 0
     
-    def validate_positive_integer_input(self, P):
-        if P == "":
-            return True
-        
-        if P.isdigit():
-            if int(P) > 0:
-                return True
-            else:
-                return False
-        else:
-            return False
+    def _on_search(self):
+        try:
+            keywords = list(dict.fromkeys([kw.strip() for kw in self.keyword_var.get().split(',') if kw.strip()]))
+            application_count = self.db.get_application_count()
+            results_with_scores = []
 
-    # Removed the make_card method, now handled by CVCard class
+            for detail_id in range(1, application_count + 1):
+                result: tuple[ApplicantProfile, ApplicationDetail] = self.db.get_application_with_details(detail_id)
+                (applicant, application_details) = result
+                cv_text = application_details.cv_text
 
-    def add_sample_cards(self):
-        for widget in self.cards_frame.winfo_children():
-            widget.destroy()
-        
-        # Instantiate CVCard objects directly
-        CVCard(self.cards_frame, "Farhan", 4, [
-            {"keyword": "React", "count": 1},
-            {"keyword": "Express", "count": 2},
-            {"keyword": "HTML", "count": 1}
-        ])
+                match_score = 0
 
-        CVCard(self.cards_frame, "Aland", 1, [
-            {"keyword": "React", "count": 1}
-        ])
+                if self.algorithm_var == "Aho-Corasick":
+                    match_score = PatternMatching.aho_corasick(cv_text, keywords)
+                else:
+                    for keyword in keywords:
+                        match self.algorithm_var:
+                            case "KMP":
+                                if PatternMatching.kmp(cv_text, keyword):
+                                    match_score += 1
+                            case "Boyer-Moore":
+                                if PatternMatching.bm(cv_text, keyword):
+                                    match_score += 1
 
-        CVCard(self.cards_frame, "Ariel", 1, [
-            {"keyword": "Express", "count": 1}
-        ])
+                if match_score > 0:
+                    results_with_scores.append((match_score, SearchResult(applicant, application_details)))
+
+            results_with_scores.sort(key=lambda x: x[0], reverse=True)
+
+            self.search_results = [res for _, res in results_with_scores[:self.match_count]]
+
+        except Exception as e:
+            print(f"Error during search: {e}")
+
 
     def run(self):
         self.root.mainloop()
