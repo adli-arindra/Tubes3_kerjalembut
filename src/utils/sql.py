@@ -109,8 +109,8 @@ class ApplicantDatabase:
             (first_name, last_name, date_of_birth, address, phone_number)
             VALUES (%s, %s, %s, %s, %s)
             ''', (applicant.first_name, applicant.last_name, 
-                  applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
-                  applicant.address, applicant.phone_number))
+                applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
+                applicant.address, applicant.phone_number))
             self.conn.commit()
             applicant.applicant_id = cur.lastrowid
             return applicant
@@ -141,33 +141,24 @@ class ApplicantDatabase:
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error getting applicant: {e}")
 
-    def get_applicant_with_details(self, applicant_id: int) -> Optional[tuple[ApplicantProfile, List[ApplicationDetail]]]:
-        applicant = self.get_applicant(applicant_id)
-        if not applicant:
+    def get_application_with_details(self, detail_id: int) -> Optional[tuple[ApplicantProfile, ApplicationDetail]]:
+        application_detail = self.get_application_details(detail_id)
+        if not application_detail:
             return None
-        details = self.get_applicant_details(applicant_id)
-        return (applicant, details)
+        applicant = self.get_applicant(application_detail.applicant_id)
+        return (applicant, application_detail)
 
-    def get_applicant_details(self, applicant_id: int) -> List[ApplicationDetail]:
+    def get_application_details(self, detail_id: int) -> Optional[ApplicationDetail]:
         try:
             cur = self.conn.cursor()
-            cur.execute('SELECT * FROM ApplicationDetail WHERE applicant_id = %s', (applicant_id,))
-            rows = cur.fetchall()
-            return [self._row_to_application_detail(row) for row in rows]
+            cur.execute('SELECT * FROM ApplicationDetail WHERE detail_id = %s', (detail_id,))
+            row = cur.fetchone()
+            if row:
+                return self._row_to_application_detail(row)
+            return None
         except mysql.connector.Error as e:
-            raise DatabaseError(f"Error getting applicant details: {e}")
+            raise DatabaseError(f"Error getting application detail: {e}")
 
-    def search_applicants(self, search_term: str) -> List[ApplicantProfile]:
-        try:
-            cur = self.conn.cursor()
-            search_pattern = f"%{search_term}%"
-            cur.execute('''
-            SELECT * FROM ApplicantProfile 
-            WHERE first_name LIKE %s OR last_name LIKE %s
-            ''', (search_pattern, search_pattern))
-            return [self._row_to_applicant(row) for row in cur.fetchall()]
-        except mysql.connector.Error as e:
-            raise DatabaseError(f"Error searching applicants: {e}")
 
     def update_applicant(self, applicant: ApplicantProfile) -> bool:
         try:
@@ -178,9 +169,9 @@ class ApplicantDatabase:
                 address = %s, phone_number = %s
             WHERE applicant_id = %s
             ''', (applicant.first_name, applicant.last_name,
-                  applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
-                  applicant.address, applicant.phone_number,
-                  applicant.applicant_id))
+                applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
+                applicant.address, applicant.phone_number,
+                applicant.applicant_id))
             self.conn.commit()
             return cur.rowcount > 0
         except mysql.connector.Error as e:
@@ -195,6 +186,23 @@ class ApplicantDatabase:
             return cur.rowcount > 0
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error deleting applicant: {e}")
+        
+    def get_applicant_count(self) -> int:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('SELECT COUNT(*) FROM ApplicantProfile')
+            return cur.fetchone()[0]
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error getting applicant count: {e}")
+
+    def get_application_count(self) -> int:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('SELECT COUNT(*) FROM ApplicationDetail')
+            return cur.fetchone()[0]
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error getting application count: {e}")
+
 
     def _row_to_applicant(self, row: tuple) -> ApplicantProfile:
         dob = None
