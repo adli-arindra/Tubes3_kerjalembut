@@ -257,3 +257,11 @@ class Regex:
     def _extract_certification(text: str) -> List[str]:
         """Return any certification lines."""
         return Regex._split_lines(Regex._get_section(text, "certification"))
+    
+
+if __name__ == "__main__":
+    import pandas as pd
+    df = pd.read_csv("data/resume.csv")
+    html = df.loc[0]['Resume_html']
+    result = Regex.extract_summary(html)
+    print(result)
