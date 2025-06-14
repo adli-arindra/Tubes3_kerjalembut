@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime
 from src.model.applicant_profile import ApplicantProfile
 from src.model.application_detail import ApplicationDetail
-from src.model.sql import ApplicantDatabase
+from utils.sql import ApplicantDatabase
 import os
 import sys
 

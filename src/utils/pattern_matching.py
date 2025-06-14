@@ -92,7 +92,7 @@ class PatternMatching:
         return prev[m]
     
     @staticmethod
-    def aho_corasick(text: str, patterns: list[str]) -> bool:
+    def aho_corasick(text: str, patterns: list[str]) -> int:
         from collections import deque
 
         class Node:
@@ -126,14 +126,22 @@ class PatternMatching:
                 queue.append(child)
 
         node = root
+        match_count = 0
+
+        # Count match at position 0 (before reading any character)
+        if node.output:
+            match_count += len(node.output)
+
         for char in text:
             while node and char not in node.children:
                 node = node.fail
             node = node.children[char] if node and char in node.children else root
             if node.output:
-                return True
+                match_count += len(node.output)
 
-        return False
+        return match_count
+
+
 
     
 # janlup tes dulu, ganti aja methodnya jadi method algoritma lu pada
@@ -213,15 +221,15 @@ if __name__ == "__main__":
     print("--- Aho-Corasick Function Test ---")
 
     test_cases_ac = [
-        ("ABABDABACDABABCABAB", ["ABABCABAB", "XYZ"], True),
-        ("ABCDEFG", ["XYZ", "LMN"], False),
-        ("ABCDEFG", ["EFG", "HIJ"], True),
-        ("AAAAAA", ["AAA", "BBBB"], True),
-        ("ABCDEFG", [], False),
-        ("", ["A", "B"], False),
-        ("ABCDEFG", [""], True),
-        ("ABCDEFG", ["CDE", "XYZ"], True),
-        ("ABCDEFG", ["xyz", "efg"], False),  # case-sensitive
+        ("ABABDABACDABABCABAB", ["ABABCABAB", "XYZ"], 1),  # One pattern matches
+        ("ABCDEFG", ["XYZ", "LMN"], 0),                   # No pattern matches
+        ("ABCDEFG", ["EFG", "HIJ"], 1),                   # One pattern matches
+        ("AAAAAA", ["AAA", "BBBB"], 4),                   # "AAA" matches 4 times in overlapping substrings
+        ("ABCDEFG", [], 0),                               # No patterns, no matches
+        ("", ["A", "B"], 0),                              # Empty text, no matches
+        ("ABCDEFG", [""], 8),                             # Empty pattern matches at every position (length + 1)
+        ("ABCDEFG", ["CDE", "XYZ"], 1),                   # One pattern matches
+        ("ABCDEFG", ["xyz", "efg"], 0),                   # Case-sensitive: no matches
     ]
 
     for i, (text, patterns, expected) in enumerate(test_cases_ac):
@@ -232,3 +240,4 @@ if __name__ == "__main__":
         print(f"  Expected: {expected}")
         print(f"  Result: {result}")
         print(f"  Match: {result == expected}")
+
