@@ -5,8 +5,10 @@ from src.model.search_result import SearchResult
 from src.model.applicant_profile import ApplicantProfile
 from src.model.application_detail import ApplicationDetail
 from src.utils.sql import ApplicantDatabase
-from src.utils.pdf_reader import PDFReader
 from src.utils.pattern_matching import PatternMatching
+import concurrent.futures
+import os
+import time
 
 class Homepage:
     def __init__(self, root):
@@ -15,7 +17,7 @@ class Homepage:
         ctk.set_default_color_theme("blue")
         
         self.root.title("CV Analyzer App")
-        self.root.geometry("800x600")
+        self.root.geometry("800x800")
         self.root.resizable(False, False)
 
         self.db = ApplicantDatabase()
@@ -24,6 +26,8 @@ class Homepage:
         self.keyword_var = ctk.StringVar(value="")
         self.cv_cards = []
         self.match_count = ctk.IntVar(value=10)
+        self.prefetched_data = []
+        self.prefetch()
 
         self.container = ctk.CTkFrame(self.root, fg_color="transparent")
         self.container.pack(fill="both", expand=True, padx=20, pady=(5,20))
@@ -76,6 +80,9 @@ class Homepage:
         self.search_button = ctk.CTkButton(self.container, text="Search", command=self._on_search)
         self.search_button.pack(fill="x", padx=10, pady=(10, 0))
 
+        self.status_label = ctk.CTkLabel(self.container, text="", font=("Arial", 14), text_color="#AAAAAA")
+        self.status_label.pack(pady=(5, 0), anchor='w')
+
         self.results_frame = ctk.CTkScrollableFrame(self.container)
         self.results_frame.pack(fill="both", expand=True, pady=(10, 0))
 
@@ -87,50 +94,99 @@ class Homepage:
             return True 
         return value.isdigit() and int(value) > 0
     
+    def prefetch(self):
+        self.prefetched_data = []
+        detail_ids = self.db.get_all_detail_ids()
+
+        for detail_id in detail_ids:
+            try:
+                result = self.db.get_application_with_details(detail_id)
+                if not result:
+                    continue
+
+                applicant, application_detail = result
+                application_pdf = self.db.get_application_pdf(application_detail.detail_id)
+
+                if not application_pdf or not application_pdf.cv_text:
+                    continue
+
+                self.prefetched_data.append((applicant, application_detail, application_pdf))
+
+            except Exception:
+                import traceback; traceback.print_exc()
+
     def _on_search(self):
         try:
-            keywords = list(dict.fromkeys([kw.strip() for kw in self.keyword_var.get().split(',') if kw.strip()]))
-            application_count = self.db.get_application_count()
-            results_with_scores = []
+            self.clear_cv_cards()
+            keywords = list(dict.fromkeys([kw.strip() for kw in self.keyword_var.get().lower().split(',') if kw.strip()]))
+            max_workers = min(32, os.cpu_count() * 5)
 
-            for detail_id in range(1, application_count + 1):
-                result: tuple[ApplicantProfile, ApplicationDetail] = self.db.get_application_with_details(detail_id)
-                (applicant, application_details) = result
-                cv_text = application_details.cv_text
+            def process_entry(entry):
+                try:
+                    applicant, application_details, application_pdf = entry
 
-                matches: dict[str, int] = {}
+                    if not application_pdf or not application_pdf.cv_text:
+                        return None
 
-                if self.algorithm_var == "Aho-Corasick":
-                    match_score, matches = PatternMatching.aho_corasick(cv_text, keywords)
-                else:
-                    for keyword in keywords:
-                        match self.algorithm_var:
-                            case "KMP":
-                                count = PatternMatching.kmp_count(cv_text, keyword)
-                            case "Boyer-Moore":
-                                count = PatternMatching.bm_count(cv_text, keyword)
-                            case _:
-                                count = 0
+                    cv_text = application_pdf.cv_text.lower()
+                    matches = {}
+                    algorithm = self.algorithm_var.get()
 
-                        if count > 0:
-                            matches[keyword] = count
+                    if algorithm == "Aho-Corasick":
+                        match_score, matches = PatternMatching.aho_corasick(cv_text, keywords)
+                    else:
+                        for keyword in keywords:
+                            count = 0
+                            if algorithm == "KMP":
+                                count = PatternMatching.kmp(cv_text, keyword)
+                            elif algorithm == "Boyer-Moore":
+                                count = PatternMatching.bm(cv_text, keyword)
+                            if count > 0:
+                                matches[keyword] = count
+                        match_score = sum(matches.values())
 
-                    match_score = sum(matches.values())
+                    if matches:
+                        return (match_score, SearchResult(applicant, application_details, application_pdf, matches))
+                    return None
+                except Exception:
+                    import traceback; traceback.print_exc()
+                    return None
 
-                if matches:
-                    results_with_scores.append((
-                        match_score,
-                        SearchResult(applicant, application_details, matches)
-                    ))
+            def on_complete(results_with_scores, duration):
+                try:
+                    self.search_results = [res for _, res in results_with_scores[:self.match_count.get()]]
+                    for res in self.search_results:
+                        self.add_cv_card(res)
+                    ms = duration * 1000
+                    self.status_label.configure(
+                        text=f"Scanned {len(self.prefetched_data)} CVs in {ms:.0f} ms."
+                    )
+                except Exception:
+                    import traceback; traceback.print_exc()
 
-            results_with_scores.sort(key=lambda x: x[0], reverse=True)
-            self.search_results = [res for _, res in results_with_scores[:self.match_count]]
+            def run_in_background():
+                start_time = time.time()
+                results = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    futures = [executor.submit(process_entry, entry) for entry in self.prefetched_data]
+                    for f in concurrent.futures.as_completed(futures):
+                        res = f.result()
+                        if res:
+                            results.append(res)
+                results.sort(key=lambda x: x[0], reverse=True)
+                duration = time.time() - start_time
+                self.root.after(0, lambda: on_complete(results, duration))
 
-            for search_result in self.search_results:
-                self.add_cv_card(search_result)
+            import threading
+            threading.Thread(target=run_in_background, daemon=True).start()
 
         except Exception as e:
             print(f"Error during search: {e}")
+
+    def clear_cv_cards(self):
+        for card in self.cv_cards:
+            card.destroy()
+        self.cv_cards.clear()
 
     def add_cv_card(self, search_result: SearchResult):
         card = CvCard(self.results_frame, search_result=search_result)

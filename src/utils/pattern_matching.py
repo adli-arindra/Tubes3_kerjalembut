@@ -2,19 +2,13 @@ import time
 
 class PatternMatching:
     @staticmethod
-    def kmp(text: str, pattern: str) -> bool:
+    def kmp(text: str, pattern: str) -> int:
         n = len(text)
         m = len(pattern)
-
-        if m == 0:
-            return True
-        if n == 0 and m > 0:
-            return False
-        if m > n:
-            return False
+        if m == 0 or n == 0 or m > n:
+            return 0
 
         lps = [0] * m
-        
         length = 0
         i = 1
         while i < m:
@@ -29,46 +23,45 @@ class PatternMatching:
                     lps[i] = 0
                     i += 1
 
-        i = 0
-        j = 0
+        i = j = 0
+        count = 0
         while i < n:
             if pattern[j] == text[i]:
                 i += 1
                 j += 1
 
             if j == m:
-                return True
+                count += 1
+                j = lps[j - 1]
             elif i < n and pattern[j] != text[i]:
                 if j != 0:
                     j = lps[j - 1]
                 else:
                     i += 1
-        return False
-    
+        return count
+
     @staticmethod
-    def bm(text: str, pattern: str) -> bool:
+    def bm(text: str, pattern: str) -> int:
         n = len(text)
         m = len(pattern)
-
-        if m == 0:
-            return True
-        if m > n:
-            return False
+        if m == 0 or m > n:
+            return 0
 
         skip = {pattern[i]: m - i - 1 for i in range(m - 1)}
-
+        count = 0
         i = 0
+
         while i <= n - m:
             j = m - 1
             while j >= 0 and pattern[j] == text[i + j]:
                 j -= 1
             if j < 0:
-                return True
-
-            next_char = text[i + m - 1]
-            i += skip.get(next_char, m)
-
-        return False
+                count += 1
+                i += m
+            else:
+                next_char = text[i + m - 1]
+                i += skip.get(next_char, m)
+        return count
     
     @staticmethod
     def ld(text: str, pattern: str) -> int:
@@ -144,18 +137,18 @@ class PatternMatching:
 # janlup tes dulu, ganti aja methodnya jadi method algoritma lu pada
 if __name__ == "__main__":
     test_cases = [
-        ("ABABDABACDABABCABAB", "ABABCABAB", True), # Found
-        ("ABCDEFG", "EFG", True),                   # Found
-        ("ABCDEFG", "XYZ", False),                  # Not found
-        ("AAAAAA", "AAA", True),                    # Repeating pattern
-        ("AAAAAB", "AAAB", True),                   # Repeating pattern at end
-        ("ABCABCABC", "ABC", True),                 # Repeating text
-        ("TESTINGTEST", "TEST", True),              # Overlapping pattern
-        ("SHORT", "LONGPATTERN", False),            # Pattern longer than text
-        ("", "A", False),                           # Empty text
-        ("A", "", True),                            # Empty pattern
-        ("A", "A", True),                           # Single character match
-        ("A", "B", False),                          # Single character mismatch
+        ("ABABDABACDABABCABAB", "ABABCABAB", 1), # appears once
+        ("ABCDEFG", "EFG", 1),
+        ("ABCDEFG", "XYZ", 0),
+        ("AAAAAA", "AAA", 2), # non-overlapping AAA
+        ("AAAAAB", "AAAB", 1),
+        ("ABCABCABC", "ABC", 3),
+        ("TESTINGTEST", "TEST", 2),
+        ("SHORT", "LONGPATTERN", 0),
+        ("", "A", 0),
+        ("A", "", 0),  # you can set it to 0 or raise an error
+        ("A", "A", 1),
+        ("A", "B", 0),
     ]
 
     print("--- KMP Function Test with Time Execution ---")

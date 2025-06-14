@@ -3,7 +3,7 @@ from src.model.search_result import SearchResult
 
 class CvCard(ctk.CTkFrame):
     def __init__(self, parent, search_result: SearchResult, **kwargs):
-        super().__init__(parent, width=200, height=250, **kwargs)
+        super().__init__(parent, height=250, **kwargs)
 
         self.configure(corner_radius=10, border_width=1, border_color="#444")
 

@@ -11,7 +11,7 @@ class PDFReader:
             return None
 
         try:
-            output = io.StringIO()
+            output = io.BytesIO()
             with open(pdf_path, 'rb') as f:
                 extract_text_to_fp(
                     f, output,
@@ -19,8 +19,9 @@ class PDFReader:
                     output_type='html',
                     codec='utf-8'
                 )
-            return output.getvalue()
-        except Exception:
+            return output.getvalue().decode('utf-8')
+        except Exception as e:
+            print(f"[ERROR] read_raw failed on {pdf_path}: {e}")
             return None
 
     @staticmethod

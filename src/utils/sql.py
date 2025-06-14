@@ -103,6 +103,7 @@ class ApplicantDatabase:
         try:
             cur = self.conn.cursor()
             cur.execute("SET FOREIGN_KEY_CHECKS = 0")
+            cur.execute("DELETE FROM ApplicationPDF")
             cur.execute("DELETE FROM ApplicationDetail")
             cur.execute("DELETE FROM ApplicantProfile")
             cur.execute("SET FOREIGN_KEY_CHECKS = 1")
@@ -115,6 +116,7 @@ class ApplicantDatabase:
         try:
             cur = self.conn.cursor()
             # Drop in correct order to avoid FK issues
+            cur.execute("DROP TABLE IF EXISTS ApplicationPDF")
             cur.execute("DROP TABLE IF EXISTS ApplicationDetail")
             cur.execute("DROP TABLE IF EXISTS ApplicantProfile")
             print("Tables reset successfully.")
@@ -181,7 +183,6 @@ class ApplicantDatabase:
             return None
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error getting application detail: {e}")
-
 
     def update_applicant(self, applicant: ApplicantProfile) -> bool:
         try:
@@ -268,6 +269,15 @@ class ApplicantDatabase:
             return cur.rowcount > 0
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error deleting application PDF: {e}")
+    
+    def get_all_detail_ids(self) -> List[int]:
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT detail_id FROM ApplicationDetail")
+            rows = cur.fetchall()
+            return [row[0] for row in rows]
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error fetching detail IDs: {e}")
 
 
     def _row_to_applicant(self, row: tuple) -> ApplicantProfile:

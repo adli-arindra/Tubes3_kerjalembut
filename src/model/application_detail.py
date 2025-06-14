@@ -16,9 +16,6 @@ class ApplicationDetail:
         self.application_role = application_role
         self.cv_path = cv_path
 
-        self.cv_text = PDFReader.read_raw(self.cv_path)
-        self.cv_raw = PDFReader.read_text(self.cv_path)
-
     def __repr__(self):
         return (f"ApplicationDetail(detail_id={self.detail_id}, "
                 f"applicant_id={self.applicant_id}, "

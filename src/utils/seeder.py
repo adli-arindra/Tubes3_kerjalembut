@@ -119,4 +119,6 @@ def seed_database_from_csv(db: ApplicantDatabase):
 
 if __name__ == "__main__":
     db = ApplicantDatabase()
-    seed_database_from_csv(db)
+    # db.clear_db()
+    # db.reset_tables()
+    # seed_database_from_csv(db)
