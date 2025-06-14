@@ -6,6 +6,8 @@ import configparser
 
 from src.model.applicant_profile import ApplicantProfile
 from src.model.application_detail import ApplicationDetail
+from src.model.application_pdf import ApplicationPDF
+
 
 class ApplicantDatabase:
     def __init__(self, config_path: str = 'data/config.ini'):
@@ -54,7 +56,7 @@ class ApplicantDatabase:
             cur = self.conn.cursor()
             cur.execute('''
             CREATE TABLE IF NOT EXISTS ApplicantProfile (
-                applicant_id INT AUTO_INCREMENT PRIMARY KEY,
+                applicant_id INT PRIMARY KEY,
                 first_name VARCHAR(255),
                 last_name VARCHAR(255),
                 date_of_birth DATE,
@@ -64,11 +66,19 @@ class ApplicantDatabase:
             ''')
             cur.execute('''
             CREATE TABLE IF NOT EXISTS ApplicationDetail (
-                detail_id INT AUTO_INCREMENT PRIMARY KEY,
+                detail_id INT PRIMARY KEY,
                 applicant_id INT NOT NULL,
                 application_role VARCHAR(255),
                 cv_path TEXT,
                 FOREIGN KEY(applicant_id) REFERENCES ApplicantProfile(applicant_id) ON DELETE CASCADE
+            )
+            ''')
+            cur.execute('''
+            CREATE TABLE IF NOT EXISTS ApplicationPDF (
+                detail_id INT PRIMARY KEY,
+                cv_text TEXT,
+                cv_raw TEXT,
+                FOREIGN KEY(detail_id) REFERENCES ApplicationDetail(detail_id) ON DELETE CASCADE
             )
             ''')
             self.conn.commit()
@@ -93,26 +103,39 @@ class ApplicantDatabase:
         try:
             cur = self.conn.cursor()
             cur.execute("SET FOREIGN_KEY_CHECKS = 0")
-            cur.execute("TRUNCATE TABLE ApplicationDetail")
-            cur.execute("TRUNCATE TABLE ApplicantProfile")
+            cur.execute("DELETE FROM ApplicationDetail")
+            cur.execute("DELETE FROM ApplicantProfile")
             cur.execute("SET FOREIGN_KEY_CHECKS = 1")
             self.conn.commit()
-            print("Database cleared successfully.")
+            print("Database rows cleared successfully.")
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error clearing database: {e}")
+        
+    def reset_tables(self) -> None:
+        try:
+            cur = self.conn.cursor()
+            # Drop in correct order to avoid FK issues
+            cur.execute("DROP TABLE IF EXISTS ApplicationDetail")
+            cur.execute("DROP TABLE IF EXISTS ApplicantProfile")
+            print("Tables reset successfully.")
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error resetting tables: {e}")
+
 
     def add_applicant(self, applicant: ApplicantProfile) -> ApplicantProfile:
         try:
             cur = self.conn.cursor()
             cur.execute('''
             INSERT INTO ApplicantProfile 
-            (first_name, last_name, date_of_birth, address, phone_number)
-            VALUES (%s, %s, %s, %s, %s)
-            ''', (applicant.first_name, applicant.last_name, 
+            (applicant_id, first_name, last_name, date_of_birth, address, phone_number)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (applicant.applicant_id,
+                applicant.first_name,
+                applicant.last_name,
                 applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
-                applicant.address, applicant.phone_number))
+                applicant.address,
+                applicant.phone_number))
             self.conn.commit()
-            applicant.applicant_id = cur.lastrowid
             return applicant
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error adding applicant: {e}")
@@ -121,14 +144,14 @@ class ApplicantDatabase:
         try:
             cur = self.conn.cursor()
             cur.execute('''
-            INSERT INTO ApplicationDetail (applicant_id, application_role, cv_path)
-            VALUES (%s, %s, %s)
-            ''', (detail.applicant_id, detail.application_role, detail.cv_path))
+            INSERT INTO ApplicationDetail (detail_id, applicant_id, application_role, cv_path)
+            VALUES (%s, %s, %s, %s)
+            ''', (detail.detail_id, detail.applicant_id, detail.application_role, detail.cv_path))
             self.conn.commit()
-            detail.detail_id = cur.lastrowid
             return detail
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error adding application detail: {e}")
+
 
     def get_applicant(self, applicant_id: int) -> Optional[ApplicantProfile]:
         try:
@@ -203,6 +226,49 @@ class ApplicantDatabase:
         except mysql.connector.Error as e:
             raise DatabaseError(f"Error getting application count: {e}")
 
+    def add_application_pdf(self, pdf: ApplicationPDF) -> ApplicationPDF:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('''
+            INSERT INTO ApplicationPDF (detail_id, cv_text, cv_raw)
+            VALUES (%s, %s, %s)
+            ''', (pdf.detail_id, pdf.cv_text, pdf.cv_raw))
+            self.conn.commit()
+            return pdf
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error adding application PDF: {e}")
+
+    def get_application_pdf(self, detail_id: int) -> Optional[ApplicationPDF]:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('SELECT * FROM ApplicationPDF WHERE detail_id = %s', (detail_id,))
+            row = cur.fetchone()
+            if row:
+                return self._row_to_application_pdf(row)
+            return None
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error getting application PDF: {e}")
+
+    def update_application_pdf(self, pdf: ApplicationPDF) -> bool:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('''
+            UPDATE ApplicationPDF SET cv_text = %s, cv_raw = %s WHERE detail_id = %s
+            ''', (pdf.cv_text, pdf.cv_raw, pdf.detail_id))
+            self.conn.commit()
+            return cur.rowcount > 0
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error updating application PDF: {e}")
+
+    def delete_application_pdf(self, detail_id: int) -> bool:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('DELETE FROM ApplicationPDF WHERE detail_id = %s', (detail_id,))
+            self.conn.commit()
+            return cur.rowcount > 0
+        except mysql.connector.Error as e:
+            raise DatabaseError(f"Error deleting application PDF: {e}")
+
 
     def _row_to_applicant(self, row: tuple) -> ApplicantProfile:
         dob = None
@@ -229,6 +295,13 @@ class ApplicantDatabase:
             applicant_id=row[1],
             application_role=row[2],
             cv_path=row[3]
+        )
+    
+    def _row_to_application_pdf(self, row: tuple) -> ApplicationPDF:
+        return ApplicationPDF(
+            detail_id=row[0],
+            cv_text=row[1],
+            cv_raw=row[2]
         )
 
 class DatabaseError(Exception):

@@ -10,6 +10,7 @@ Program ini adalah sebuah aplikasi manajemen CV ATS yang mengimplementasikan KMP
 python -m venv venv
 ./venv/Scripts/activate
 pip install -r requirements.txt
+python -m src.utils.sql # seeding basis data SQL
 ```
 
 # iii. Command

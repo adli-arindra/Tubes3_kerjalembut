@@ -1,96 +1,122 @@
+import pandas as pd
+from datetime import datetime
+from src.model.applicant_profile import ApplicantProfile
+from src.model.application_detail import ApplicationDetail
+from src.model.application_pdf import ApplicationPDF
+from src.utils.sql import ApplicantDatabase
+from src.utils.pdf_reader import PDFReader
+import random
+from datetime import date, timedelta
+from typing import Optional
 import os
 import sys
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+def find_path(id: str) -> str:
+    root_dir = "data\\pdf"
+    for category in os.listdir(root_dir):
+        for file in os.listdir(os.path.join(root_dir, category)):
+            if file.startswith(id):
+                return os.path.join(root_dir, category, file)
 
-import pandas as pd
-from datetime import datetime, timedelta
-from random import randint, choice
-from src.model.applicant_profile import ApplicantProfile
-from src.model.application_detail import ApplicationDetail
-from src.utils.sql import ApplicantDatabase
+def generate_random_applicant_profile(applicant_id: int) -> Optional[ApplicantProfile]:
+    first_names = [
+        "Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Heidi",
+        "Ivy", "Jack", "Karen", "Liam", "Mia", "Noah", "Olivia", "Peter",
+        "Quinn", "Rachel", "Sam", "Tina", "Uma", "Victor", "Wendy", "Xavier",
+        "Yara", "Zoe", "David", "Emily", "George", "Hannah", "Isaac", "Julia"
+    ]
+    last_names = [
+        "Smith", "Jones", "Williams", "Brown", "Davis", "Miller", "Wilson", "Moore",
+        "Taylor", "Anderson", "Thomas", "Jackson", "White", "Harris", "Martin", "Thompson",
+        "Garcia", "Martinez", "Robinson", "Clark", "Rodriguez", "Lewis", "Lee", "Walker",
+        "Hall", "Allen", "Young", "Hernandez", "King", "Wright", "Lopez", "Hill"
+    ]
+    street_types = ["St", "Ave", "Rd", "Ln", "Blvd", "Ct", "Dr", "Pl", "Ter"]
+    cities = [
+        "New York", "Los Angeles", "Chicago", "Houston", "Phoenix", "Bandung", "Surabaya",
+        "Jakarta", "Medan", "Semarang", "Yogyakarta", "San Francisco", "Seattle", "Boston",
+        "Miami", "Dallas", "Denver", "Atlanta", "Portland", "Nashville", "Orlando", "Austin"
+    ]
+    states = [
+        "CA", "NY", "TX", "FL", "IL", "WV", "JB", "MA", "WA", "GA", "OR", "CO",
+        "AZ", "TN", "PA", "OH", "MI", "NC", "VA", "MD", "NJ", "GA", "IN"
+    ]
+    
+    random_first_name = random.choice(first_names)
+    random_last_name = random.choice(last_names)
+    
+    today = date.today()
+    min_age_years = 18
+    max_age_years = 70
+    
+    max_birth_date = today - timedelta(days=min_age_years * 365.25)
+    min_birth_date = today - timedelta(days=max_age_years * 365.25)
+    
+    time_delta_days = (max_birth_date - min_birth_date).days
+    random_days = random.randint(0, time_delta_days)
+    random_date_of_birth = min_birth_date + timedelta(days=random_days)
+    
+    random_address_number = random.randint(1, 9999)
+    random_street_name = random.choice(last_names) + random.choice(street_types)
+    random_city = random.choice(cities)
+    random_state = random.choice(states)
+    random_zip_code = f"{random.randint(10000, 99999):05d}"
+    random_address = f"{random_address_number} {random_street_name}, {random_city}, {random_state} {random_zip_code}"
+    
+    phone_formats = [
+        "({area_code}) {prefix}-{line}",
+        "{area_code}-{prefix}-{line}",
+        "{area_code} {prefix} {line}"
+    ]
+    random_phone_number_format = random.choice(phone_formats)
+    random_area_code = random.randint(100, 999)
+    random_prefix = random.randint(100, 999)
+    random_line = random.randint(1000, 9999)
+    random_phone_number = random_phone_number_format.format(
+        area_code=random_area_code,
+        prefix=random_prefix,
+        line=random_line
+    )
 
+    new_applicant = ApplicantProfile(
+        applicant_id=applicant_id,
+        first_name=random_first_name,
+        last_name=random_last_name,
+        date_of_birth=random_date_of_birth,
+        address=random_address,
+        phone_number=random_phone_number
+    )
+    
+    return new_applicant
 
-def generate_random_date(start_year=1970, end_year=2000):
-    """Generate random date of birth between start and end year."""
-    start = datetime(start_year, 1, 1)
-    end = datetime(end_year, 12, 31)
-    return start + timedelta(days=randint(0, (end - start).days))
+def seed_database_from_csv(db: ApplicantDatabase):
+    df = pd.read_csv("data/Resume.csv")
+    db.clear_db()
+    id = 0
 
-def generate_random_address():
-    streets = ["Jl. Sudirman", "Jl. Thamrin", "Jl. Asia Afrika", "Jl. Merdeka", "Jl. Diponegoro"]
-    numbers = [str(randint(1, 200)) for _ in range(5)]
-    return f"{choice(streets)} No. {choice(numbers)}"
-
-def generate_random_phone():
-    return f"08{randint(1000000000, 9999999999)}"
-
-def find_pdf_path(category, filename, pdf_base_dir='data/pdf'):
-
-    # Cek beberapa kemungkinan ekstensi
-    possible_exts = ['.pdf', '.PDF']
-    for ext in possible_exts:
-        pdf_path = os.path.join(pdf_base_dir, str(category), str(filename) + ext)
-        if os.path.exists(pdf_path):
-            return pdf_path
-        # Jika filename sudah ada ekstensi
-        pdf_path2 = os.path.join(pdf_base_dir, str(category), str(filename))
-        if os.path.exists(pdf_path2):
-            return pdf_path2
-    return None
-
-def seed_database_from_csv(csv_path: str, rows_per_category: int = 20, pdf_base_dir: str = 'data/pdf'):
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
-
-    df = pd.read_csv(csv_path)
-    # Cari kolom 'ID' dan 'Category' (case-insensitive)
-    id_col = None
-    category_col = None
-    for col in df.columns:
-        if col.strip().lower() == 'id':
-            id_col = col
-        if col.strip().lower() == 'category':
-            category_col = col
-    if not id_col or not category_col:
-        raise ValueError("CSV must contain 'ID' and 'Category' columns.")
-
-    with ApplicantDatabase() as db:
-        db.clear_db()
-        total_inserted = 0
-        for _, row in df.iterrows():
-            category = str(row[category_col])
-            file_id = str(row[id_col])
-            # Data profil pelamar dari CSV jika ada
-            first_name = f"Anon{randint(1000,9999)}"
-            last_name = f"User{randint(1000,9999)}"
-            address = generate_random_address()
-            phone_number = generate_random_phone()
-            date_of_birth = generate_random_date().date()
-            applicant = ApplicantProfile(
-                first_name=first_name,
-                last_name=last_name,
-                date_of_birth=date_of_birth,
-                address=address,
-                phone_number=phone_number
+    categories = df['Category'].unique()
+    for category in categories:
+        category_head = df.loc[df['Category'] == category].head(20)
+        
+        for index, row in category_head.iterrows():
+            cv_path = find_path(str(row.ID))
+            new_applicant = generate_random_applicant_profile(id)
+            new_application = ApplicationDetail(
+                detail_id = row.ID,
+                applicant_id = id,
+                application_role = category,
+                cv_path = cv_path)
+            new_pdf = ApplicationPDF(
+                detail_id = row.ID,
+                cv_text = PDFReader.read_text(cv_path),
+                cv_raw = PDFReader.read_raw(cv_path)
             )
-            applicant = db.add_applicant(applicant)
-
-            # Data application_detail dari CSV jika ada
-            application_role = category
-            cv_path = find_pdf_path(category, file_id, pdf_base_dir)
-            if not cv_path or not os.path.exists(str(cv_path)):
-                print(f"  CV file not found for ID={file_id} in category={category}. Skipped.")
-                continue
-
-            detail = ApplicationDetail(
-                applicant_id=applicant.applicant_id,
-                application_role=application_role,
-                cv_path=cv_path
-            )
-            db.add_application_detail(detail)
-            total_inserted += 1
-    print(f"Database seeding complete. {total_inserted} applications inserted.")
+            db.add_applicant(new_applicant)
+            db.add_application_detail(new_application)
+            db.add_application_pdf(new_pdf)
+            id += 1
+            print(f"added row {id}")
 
 if __name__ == "__main__":
-    seed_database_from_csv("data/Resume.csv")
+    db = ApplicantDatabase()
+    seed_database_from_csv(db)
