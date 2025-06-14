@@ -10,4 +10,6 @@ class CvCard(ctk.CTkFrame):
         self.content = ctk.CTkFrame(self, fg_color="transparent")
         self.content.pack(fill="both", expand=True, padx=10, pady=10)
 
-        
+        full_name = search_result.applicant_profile.first_name + " " + search_result.applicant_profile.last_name
+        self.name_label = ctk.CTkLabel(self.content, text=full_name)
+        self.name_label.pack()

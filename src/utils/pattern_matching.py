@@ -92,8 +92,8 @@ class PatternMatching:
         return prev[m]
     
     @staticmethod
-    def aho_corasick(text: str, patterns: list[str]) -> int:
-        from collections import deque
+    def aho_corasick(text: str, patterns: list[str]) -> tuple[int, dict[str, int]]:
+        from collections import deque, defaultdict
 
         class Node:
             def __init__(self):
@@ -102,6 +102,7 @@ class PatternMatching:
                 self.output = set()
 
         root = Node()
+
         for pattern in patterns:
             node = root
             for char in pattern:
@@ -127,21 +128,17 @@ class PatternMatching:
 
         node = root
         match_count = 0
-
-        # Count match at position 0 (before reading any character)
-        if node.output:
-            match_count += len(node.output)
+        match_dict: dict[str, int] = defaultdict(int)
 
         for char in text:
             while node and char not in node.children:
                 node = node.fail
             node = node.children[char] if node and char in node.children else root
-            if node.output:
-                match_count += len(node.output)
+            for match in node.output:
+                match_dict[match] += 1
+                match_count += 1
 
-        return match_count
-
-
+        return match_count, dict(match_dict)
 
     
 # janlup tes dulu, ganti aja methodnya jadi method algoritma lu pada

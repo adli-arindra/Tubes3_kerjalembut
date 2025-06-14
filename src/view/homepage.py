@@ -82,16 +82,6 @@ class Homepage:
         for i in range(3):
             self.results_frame.grid_columnconfigure(i, weight=1)
 
-    def add_cv_card(self, search_result: SearchResult):
-        card = CvCard(self.results_frame, search_result=search_result)
-        
-        index = len(self.cv_cards)
-        row = index // 3
-        col = index % 3
-
-        card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
-        self.cv_cards.append(card)
-
     def validate_entry_matches(self, value):
         if value == "":
             return True 
@@ -108,30 +98,49 @@ class Homepage:
                 (applicant, application_details) = result
                 cv_text = application_details.cv_text
 
-                match_score = 0
+                matches: dict[str, int] = {}
 
                 if self.algorithm_var == "Aho-Corasick":
-                    match_score = PatternMatching.aho_corasick(cv_text, keywords)
+                    match_score, matches = PatternMatching.aho_corasick(cv_text, keywords)
                 else:
                     for keyword in keywords:
                         match self.algorithm_var:
                             case "KMP":
-                                if PatternMatching.kmp(cv_text, keyword):
-                                    match_score += 1
+                                count = PatternMatching.kmp_count(cv_text, keyword)
                             case "Boyer-Moore":
-                                if PatternMatching.bm(cv_text, keyword):
-                                    match_score += 1
+                                count = PatternMatching.bm_count(cv_text, keyword)
+                            case _:
+                                count = 0
 
-                if match_score > 0:
-                    results_with_scores.append((match_score, SearchResult(applicant, application_details)))
+                        if count > 0:
+                            matches[keyword] = count
+
+                    match_score = sum(matches.values())
+
+                if matches:
+                    results_with_scores.append((
+                        match_score,
+                        SearchResult(applicant, application_details, matches)
+                    ))
 
             results_with_scores.sort(key=lambda x: x[0], reverse=True)
-
             self.search_results = [res for _, res in results_with_scores[:self.match_count]]
+
+            for search_result in self.search_results:
+                self.add_cv_card(search_result)
 
         except Exception as e:
             print(f"Error during search: {e}")
 
+    def add_cv_card(self, search_result: SearchResult):
+        card = CvCard(self.results_frame, search_result=search_result)
+        
+        index = len(self.cv_cards)
+        row = index // 3
+        col = index % 3
+
+        card.grid(row=row, column=col, padx=10, pady=10, sticky="nsew")
+        self.cv_cards.append(card)
 
     def run(self):
         self.root.mainloop()
