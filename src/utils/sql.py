@@ -51,7 +51,8 @@ class ApplicantDatabase:
                 host=self.db_config['host'],
                 user=self.db_config['user'],
                 password=self.db_config['password'],
-                database=self.db_config['database']
+                database=self.db_config['database'],
+                auth_plugin='mysql_native_password'
             )
             cur = self.conn.cursor()
             cur.execute('''
