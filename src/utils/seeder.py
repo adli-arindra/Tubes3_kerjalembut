@@ -135,6 +135,66 @@ def get_all_cv() -> list[ApplicationPDF]:
     
     return ret
 
+def seed_from_sql(db: ApplicantDatabase, sql_file_path: str):
+    if not os.path.exists(sql_file_path):
+        print(f"SQL file not found: {sql_file_path}")
+        return
+
+    with open(sql_file_path, "r", encoding="utf-8") as file:
+        sql_script = file.read()
+    
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        for statement in sql_script.split(";"):
+            statement = statement.strip()
+            if statement:
+                cursor.execute(statement)
+        conn.commit()
+        print("Database seeded from SQL file.")
+    except Exception as e:
+        print(f"Error seeding from SQL: {e}")
+        conn.rollback()
+
+def seed_pdf_from_sql_data(db: ApplicantDatabase, sql_file_path: str):
+    if not os.path.exists(sql_file_path):
+        print(f"SQL file not found: {sql_file_path}")
+        return
+
+    with open(sql_file_path, "r", encoding="utf-8") as file:
+        sql_script = file.read()
+
+    try:
+        conn = db.get_connection()
+        cursor = conn.cursor()
+        for statement in sql_script.split(";"):
+            statement = statement.strip()
+            if statement:
+                cursor.execute(statement)
+        conn.commit()
+        print("Seeded ApplicantProfile and ApplicationDetail tables.")
+    except Exception as e:
+        print(f"Error executing SQL: {e}")
+        conn.rollback()
+        return
+
+    try:
+        cursor.execute("SELECT detail_id, cv_path FROM ApplicationDetail")
+        rows = cursor.fetchall()
+        for detail_id, cv_path in rows:
+            if not os.path.exists(cv_path):
+                print(f"CV not found for detail_id {detail_id}: {cv_path}")
+                continue
+            pdf = ApplicationPDF(
+                detail_id=detail_id,
+                cv_text=PDFReader.read_text(cv_path),
+                cv_raw=PDFReader.read_raw(cv_path)
+            )
+            db.add_application_pdf(pdf)
+        print("Generated ApplicationPDF entries from ApplicationDetail.")
+    except Exception as e:
+        print(f"Error generating ApplicationPDF: {e}")
+
 
 if __name__ == "__main__":
     db = ApplicantDatabase()
