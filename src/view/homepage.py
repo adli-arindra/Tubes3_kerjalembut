@@ -153,10 +153,14 @@ class Homepage:
                                 count = PatternMatching.bm(cv_text, keyword)
                             if count > 0:
                                 matches[keyword] = count
-                        match_score = sum(matches.values())
+
+                    match_score = sum(matches.values())
+                    has_all_keywords = all(keyword in matches for keyword in keywords)
 
                     result = None
-                    if matches:
+                    if has_all_keywords:
+                        result = (10000000 + match_score, SearchResult(applicant, application_details, application_pdf, matches))
+                    elif matches:
                         result = (match_score, SearchResult(applicant, application_details, application_pdf, matches))
 
                     fuzzy_result = None
