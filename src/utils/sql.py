@@ -310,7 +310,7 @@ class ApplicantDatabase:
     def _row_to_application_pdf(self, row: tuple) -> ApplicationPDF:
         return ApplicationPDF(
             detail_id=row[0],
-            cv_text=row[1],
+            cv_text=row[1].lower(),
             cv_raw=row[2]
         )
 

@@ -125,10 +125,7 @@ class Homepage:
                 try:
                     applicant, application_details, application_pdf = entry
 
-                    if not application_pdf or not application_pdf.cv_text:
-                        return None
-
-                    cv_text = application_pdf.cv_text.lower()
+                    cv_text = application_pdf.cv_text
                     matches = {}
                     algorithm = self.algorithm_var.get()
 
@@ -182,6 +179,22 @@ class Homepage:
 
         except Exception as e:
             print(f"Error during search: {e}")
+
+    def fuzzy_search(text: str, pattern: str, max_distance=5) -> int | None:
+        t_len = len(text)
+        p_len = len(pattern)
+        window = p_len + max_distance
+        best_distance = max_distance + 1
+
+        for i in range(t_len - p_len + 1):
+            window_text = text[i:i + p_len]
+            dist = PatternMatching.ld(window_text, pattern)
+            if dist < best_distance:
+                best_distance = dist
+            if best_distance == 0:
+                break
+
+        return best_distance if best_distance <= max_distance else None
 
     def clear_cv_cards(self):
         for card in self.cv_cards:
