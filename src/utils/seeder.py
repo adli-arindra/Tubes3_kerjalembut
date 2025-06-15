@@ -110,8 +110,8 @@ def seed_database_from_csv(db: ApplicantDatabase):
                 cv_text = PDFReader.read_text(cv_path),
                 cv_raw = PDFReader.read_raw(cv_path)
             )
-            # db.add_applicant(new_applicant)
-            # db.add_application_detail(new_application)
+            db.add_applicant(new_applicant)
+            db.add_application_detail(new_application)
             db.add_application_pdf(new_pdf)
             id += 1
             print(f"added row {id}")
@@ -198,6 +198,6 @@ def seed_pdf_from_sql_data(db: ApplicantDatabase, sql_file_path: str):
 
 if __name__ == "__main__":
     db = ApplicantDatabase()
-    # db.clear_db()
+    db.clear_db()
     # db.reset_tables()
     seed_database_from_csv(db)

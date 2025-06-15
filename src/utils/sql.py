@@ -8,6 +8,7 @@ from src.model.applicant_profile import ApplicantProfile
 from src.model.application_detail import ApplicationDetail
 from src.model.application_pdf import ApplicationPDF
 
+from src.utils.cypher import Cypher
 
 class ApplicantDatabase:
     def __init__(self, config_path: str = 'data/config.ini'):
@@ -133,11 +134,11 @@ class ApplicantDatabase:
             (applicant_id, first_name, last_name, date_of_birth, address, phone_number)
             VALUES (%s, %s, %s, %s, %s, %s)
             ''', (applicant.applicant_id,
-                applicant.first_name,
-                applicant.last_name,
+                Cypher.encrypt(applicant.first_name), # Encrypt
+                Cypher.encrypt(applicant.last_name),  # Encrypt
                 applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
-                applicant.address,
-                applicant.phone_number))
+                Cypher.encrypt(applicant.address),    # Encrypt
+                Cypher.encrypt(applicant.phone_number))) # Encrypt
             self.conn.commit()
             return applicant
         except mysql.connector.Error as e:
@@ -149,7 +150,9 @@ class ApplicantDatabase:
             cur.execute('''
             INSERT INTO ApplicationDetail (detail_id, applicant_id, application_role, cv_path)
             VALUES (%s, %s, %s, %s)
-            ''', (detail.detail_id, detail.applicant_id, detail.application_role, detail.cv_path))
+            ''', (detail.detail_id, detail.applicant_id, 
+                Cypher.encrypt(detail.application_role), # Encrypt
+                Cypher.encrypt(detail.cv_path)))         # Encrypt
             self.conn.commit()
             return detail
         except mysql.connector.Error as e:
@@ -193,9 +196,11 @@ class ApplicantDatabase:
             SET first_name = %s, last_name = %s, date_of_birth = %s, 
                 address = %s, phone_number = %s
             WHERE applicant_id = %s
-            ''', (applicant.first_name, applicant.last_name,
+            ''', (Cypher.encrypt(applicant.first_name),  # Encrypt
+                Cypher.encrypt(applicant.last_name),   # Encrypt
                 applicant.date_of_birth.isoformat() if applicant.date_of_birth else None,
-                applicant.address, applicant.phone_number,
+                Cypher.encrypt(applicant.address),     # Encrypt
+                Cypher.encrypt(applicant.phone_number), # Encrypt
                 applicant.applicant_id))
             self.conn.commit()
             return cur.rowcount > 0
@@ -234,7 +239,9 @@ class ApplicantDatabase:
             cur.execute('''
             INSERT INTO ApplicationPDF (detail_id, cv_text, cv_raw)
             VALUES (%s, %s, %s)
-            ''', (pdf.detail_id, pdf.cv_text, pdf.cv_raw))
+            ''', (pdf.detail_id, 
+                Cypher.encrypt(pdf.cv_text), # Encrypt
+                Cypher.encrypt(pdf.cv_raw)))  # Encrypt
             self.conn.commit()
             return pdf
         except mysql.connector.Error as e:
@@ -256,7 +263,9 @@ class ApplicantDatabase:
             cur = self.conn.cursor()
             cur.execute('''
             UPDATE ApplicationPDF SET cv_text = %s, cv_raw = %s WHERE detail_id = %s
-            ''', (pdf.cv_text, pdf.cv_raw, pdf.detail_id))
+            ''', (Cypher.encrypt(pdf.cv_text),  # Encrypt
+                Cypher.encrypt(pdf.cv_raw),   # Encrypt
+                pdf.detail_id))
             self.conn.commit()
             return cur.rowcount > 0
         except mysql.connector.Error as e:
@@ -288,31 +297,31 @@ class ApplicantDatabase:
                 if isinstance(row[3], date):
                     dob = row[3]
                 else:
-                    dob = date.fromisoformat(str(row[3])) 
+                    dob = date.fromisoformat(str(row[3]))
             except (TypeError, ValueError):
-                dob = None 
+                dob = None
         return ApplicantProfile(
             applicant_id=row[0],
-            first_name=row[1],
-            last_name=row[2],
+            first_name=Cypher.decrypt(row[1]), # Decrypt
+            last_name=Cypher.decrypt(row[2]),  # Decrypt
             date_of_birth=dob,
-            address=row[4],
-            phone_number=row[5]
+            address=Cypher.decrypt(row[4]),    # Decrypt
+            phone_number=Cypher.decrypt(row[5]) # Decrypt
         )
 
     def _row_to_application_detail(self, row: tuple) -> ApplicationDetail:
         return ApplicationDetail(
             detail_id=row[0],
             applicant_id=row[1],
-            application_role=row[2],
-            cv_path=row[3]
+            application_role=Cypher.decrypt(row[2]), # Decrypt
+            cv_path=Cypher.decrypt(row[3])          # Decrypt
         )
     
     def _row_to_application_pdf(self, row: tuple) -> ApplicationPDF:
         return ApplicationPDF(
             detail_id=row[0],
-            cv_text=row[1].lower(),
-            cv_raw=row[2]
+            cv_text=Cypher.decrypt(row[1]).lower(), # Decrypt and then lower
+            cv_raw=Cypher.decrypt(row[2])           # Decrypt
         )
 
 class DatabaseError(Exception):
