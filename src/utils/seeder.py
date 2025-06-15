@@ -113,12 +113,32 @@ def seed_database_from_csv(db: ApplicantDatabase):
             )
             db.add_applicant(new_applicant)
             db.add_application_detail(new_application)
-            db.add_application_pdf(new_pdf)
+            # db.add_application_pdf(new_pdf)
             id += 1
             print(f"added row {id}")
+
+def get_all_cv() -> list[ApplicationPDF]:
+    df = pd.read_csv("data/Resume.csv")
+
+    categories = df['Category'].unique()
+    ret = []
+    for category in categories:
+        category_head = df.loc[df['Category'] == category].head(20)
+        
+        for index, row in category_head.iterrows():
+            cv_path = find_path(str(row.ID))
+            new_pdf = ApplicationPDF(
+                detail_id = row.ID,
+                cv_text = PDFReader.read_text(cv_path),
+                cv_raw = PDFReader.read_raw(cv_path)
+            )
+            ret.append(new_pdf)
+    
+    return ret
+
 
 if __name__ == "__main__":
     db = ApplicantDatabase()
     # db.clear_db()
     # db.reset_tables()
-    # seed_database_from_csv(db)
+    seed_database_from_csv(db)
