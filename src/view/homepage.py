@@ -125,6 +125,11 @@ class Homepage:
 
     def _on_search(self):
         try:
+            self.search_button.configure(
+                text="Searching...",
+                fg_color="#555555",
+                state="disabled"
+            )
             self.clear_cv_cards()
             keywords = list(dict.fromkeys([kw.strip() for kw in self.keyword_var.get().lower().split(',') if kw.strip()]))
             match_limit = self.match_count.get()
@@ -164,7 +169,7 @@ class Homepage:
                         for keyword in keywords:
                             if keyword in matches:
                                 continue
-                            dist = PatternMatching.min_ld(cv_text, keyword, 1)
+                            dist = PatternMatching.min_ld(cv_text, keyword, 2)
                             if dist is None or dist > 10:
                                 fuzzy_valid = False
                                 break
@@ -207,6 +212,11 @@ class Homepage:
                     ms = duration * 1000
                     self.status_label.configure(
                         text=f"Scanned {len(self.prefetched_data)} CVs in {ms:.0f} ms."
+                    )
+                    self.search_button.configure(
+                        text="Search",
+                        fg_color="#1f6aa5",  # Restore original button color
+                        state="normal"
                     )
                 except Exception:
                     import traceback; traceback.print_exc()
