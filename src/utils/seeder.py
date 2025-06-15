@@ -91,7 +91,6 @@ def generate_random_applicant_profile(applicant_id: int) -> Optional[ApplicantPr
 
 def seed_database_from_csv(db: ApplicantDatabase):
     df = pd.read_csv("data/Resume.csv")
-    db.clear_db()
     id = 0
 
     categories = df['Category'].unique()
@@ -111,9 +110,9 @@ def seed_database_from_csv(db: ApplicantDatabase):
                 cv_text = PDFReader.read_text(cv_path),
                 cv_raw = PDFReader.read_raw(cv_path)
             )
-            db.add_applicant(new_applicant)
-            db.add_application_detail(new_application)
-            # db.add_application_pdf(new_pdf)
+            # db.add_applicant(new_applicant)
+            # db.add_application_detail(new_application)
+            db.add_application_pdf(new_pdf)
             id += 1
             print(f"added row {id}")
 
