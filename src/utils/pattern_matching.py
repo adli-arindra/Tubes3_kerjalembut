@@ -85,6 +85,58 @@ class PatternMatching:
         return prev[m]
     
     @staticmethod
+    def ld_limited(text: str, pattern: str, limit: int = 5) -> int:
+        n = len(text)
+        m = len(pattern)
+
+        if abs(n - m) > limit:
+            return limit + 1
+
+        prev = list(range(m + 1))
+        curr = [0] * (m + 1)
+
+        for i in range(1, n + 1):
+            curr[0] = i
+            min_in_row = curr[0]
+
+            for j in range(1, m + 1):
+                if text[i - 1] == pattern[j - 1]:
+                    curr[j] = prev[j - 1]
+                else:
+                    curr[j] = min(
+                        prev[j] + 1,
+                        curr[j - 1] + 1,
+                        prev[j - 1] + 1
+                    )
+                min_in_row = min(min_in_row, curr[j])
+
+            if min_in_row > limit:
+                return limit + 1
+
+            prev, curr = curr, prev
+
+        return prev[m]
+    
+    @staticmethod
+    def min_ld(text: str, pattern: str, limit: int = 5) -> int:
+        words = text.split()
+        min_dist = limit + 1
+
+        for word in words:
+            if abs(len(word) - len(pattern)) > limit:
+                continue
+
+            dist = PatternMatching.ld_limited(word, pattern, limit)
+            if dist < min_dist:
+                min_dist = dist
+                if dist == 0:
+                    break 
+
+        return min_dist if min_dist <= limit else None
+
+
+    
+    @staticmethod
     def aho_corasick(text: str, patterns: list[str]) -> tuple[int, dict[str, int]]:
         from collections import deque, defaultdict
 

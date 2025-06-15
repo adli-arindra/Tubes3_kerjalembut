@@ -25,6 +25,7 @@ class Homepage:
         self.algorithm_var = ctk.StringVar(value="KMP")
         self.keyword_var = ctk.StringVar(value="")
         self.cv_cards = []
+        self.fuzzy_enabled = ctk.BooleanVar(value=True)
         self.match_count = ctk.IntVar(value=10)
         self.prefetched_data = []
         self.prefetch()
@@ -60,6 +61,13 @@ class Homepage:
         self.kmp_radio.pack(side="left", expand=True, fill="x", padx=5)
         self.bm_radio.pack(side="left", expand=True, fill="x", padx=5)
         self.aho_radio.pack(side="left", expand=True, fill="x", padx=5)
+
+        self.fuzzy_checkbox = ctk.CTkCheckBox(
+            self.container,
+            text="Enable Fuzzy Matching",
+            variable=self.fuzzy_enabled
+        )
+        self.fuzzy_checkbox.pack(anchor='w', pady=10)
 
         self.label = ctk.CTkLabel(self.container, text="Show Matches:", font=("Arial", 18))
         self.label.pack(anchor='w')
@@ -119,12 +127,12 @@ class Homepage:
         try:
             self.clear_cv_cards()
             keywords = list(dict.fromkeys([kw.strip() for kw in self.keyword_var.get().lower().split(',') if kw.strip()]))
+            match_limit = self.match_count.get()
             max_workers = min(32, os.cpu_count() * 5)
 
             def process_entry(entry):
                 try:
                     applicant, application_details, application_pdf = entry
-
                     cv_text = application_pdf.cv_text
                     matches = {}
                     algorithm = self.algorithm_var.get()
@@ -142,18 +150,60 @@ class Homepage:
                                 matches[keyword] = count
                         match_score = sum(matches.values())
 
+                    result = None
                     if matches:
-                        return (match_score, SearchResult(applicant, application_details, application_pdf, matches))
-                    return None
+                        result = (match_score, SearchResult(applicant, application_details, application_pdf, matches))
+
+                    fuzzy_result = None
+
+                    if self.fuzzy_enabled.get():
+                        fuzzy_score = 0
+                        fuzzy_valid = True
+                        fuzzy_distances = {}
+
+                        for keyword in keywords:
+                            if keyword in matches:
+                                continue
+                            dist = PatternMatching.min_ld(cv_text, keyword, 1)
+                            if dist is None or dist > 10:
+                                fuzzy_valid = False
+                                break
+                            fuzzy_distances[keyword] = dist
+                            fuzzy_score += dist
+
+                        if fuzzy_valid:
+                            fuzzy_result = (fuzzy_score, SearchResult(applicant, application_details, application_pdf, fuzzy_distances))
+
+                    return result, fuzzy_result
+
                 except Exception:
                     import traceback; traceback.print_exc()
-                    return None
+                    return None, None
+
 
             def on_complete(results_with_scores, duration):
                 try:
-                    self.search_results = [res for _, res in results_with_scores[:self.match_count.get()]]
+                    exact_matches = []
+                    fuzzy_candidates = []
+
+                    for exact, fuzzy in results_with_scores:
+                        if exact:
+                            exact_matches.append(exact)
+                        elif fuzzy:
+                            fuzzy_candidates.append(fuzzy)
+
+                    exact_matches.sort(key=lambda x: x[0], reverse=True)
+                    fuzzy_candidates.sort(key=lambda x: x[0])
+
+                    final_results = exact_matches[:match_limit]
+                    remaining = match_limit - len(final_results)
+                    if remaining > 0:
+                        final_results += fuzzy_candidates[:remaining]
+
+                    self.search_results = [res for _, res in final_results]
                     for res in self.search_results:
                         self.add_cv_card(res)
+
                     ms = duration * 1000
                     self.status_label.configure(
                         text=f"Scanned {len(self.prefetched_data)} CVs in {ms:.0f} ms."
@@ -170,7 +220,6 @@ class Homepage:
                         res = f.result()
                         if res:
                             results.append(res)
-                results.sort(key=lambda x: x[0], reverse=True)
                 duration = time.time() - start_time
                 self.root.after(0, lambda: on_complete(results, duration))
 
@@ -179,6 +228,7 @@ class Homepage:
 
         except Exception as e:
             print(f"Error during search: {e}")
+
 
     def fuzzy_search(text: str, pattern: str, max_distance=5) -> int | None:
         t_len = len(text)
